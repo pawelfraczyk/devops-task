@@ -59,6 +59,26 @@ Do not source `.env.example` into both shells. Both processes read `PORT`, and t
 
 The local passwords above are for a laptop only. [TASKS.md](./TASKS.md) does not allow those values in Compose.
 
+## Run the stack
+
+Docker Compose wires the API, web app, Postgres, and Valkey together. Export two passwords in the shell (do not commit real values):
+
+```bash
+export POSTGRES_PASSWORD='choose-a-strong-postgres-password'
+export VALKEY_PASSWORD='choose-a-strong-valkey-password'
+docker compose up --build
+```
+
+Open http://127.0.0.1:3000 and press **Record click**. The counter should increase on each click.
+
+Stop the stack:
+
+```bash
+docker compose down
+```
+
+Postgres data is kept in a named volume, so `docker compose down` followed by `docker compose up -d` preserves the counter. Only the web port is published on the loopback interface.
+
 ## Checks
 
 ```bash
