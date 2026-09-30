@@ -59,6 +59,42 @@ Do not source `.env.example` into both shells. Both processes read `PORT`, and t
 
 The local passwords above are for a laptop only. [TASKS.md](./TASKS.md) does not allow those values in Compose.
 
+## Run the stack
+
+Docker Compose wires the API, web app, Postgres, and Valkey together. Export two passwords in the shell (do not commit real values):
+
+```bash
+export POSTGRES_PASSWORD='choose-a-strong-postgres-password'
+export VALKEY_PASSWORD='choose-a-strong-valkey-password'
+docker compose up --build
+```
+
+Open http://127.0.0.1:3000 and press **Record click**. The counter should increase on each click.
+
+Stop the stack:
+
+```bash
+docker compose down
+```
+
+Postgres data is kept in a named volume, so `docker compose down` followed by `docker compose up -d` preserves the counter. Only the web port is published on the loopback interface.
+
+## Images
+
+On push to `main`, GitHub Actions publishes container images to GitHub Container Registry:
+
+- `ghcr.io/<owner>/<repo>/api`
+- `ghcr.io/<owner>/<repo>/web`
+
+Replace `<owner>/<repo>` with this repository's GitHub path (for example `fpurichaya/devops-task`).
+
+Tag scheme:
+
+- `sha-<full git commit sha>` — immutable build identifier
+- `main` — moving tag for the latest `main` build
+
+No `latest` tag is published.
+
 ## Checks
 
 ```bash
