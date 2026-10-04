@@ -79,6 +79,22 @@ docker compose down
 
 Postgres data is kept in a named volume, so `docker compose down` followed by `docker compose up -d` preserves the counter. Only the web port is published on the loopback interface.
 
+## Images
+
+On push to `main`, GitHub Actions publishes container images to GitHub Container Registry:
+
+- `ghcr.io/<owner>/<repo>/api`
+- `ghcr.io/<owner>/<repo>/web`
+
+Replace `<owner>/<repo>` with this repository's GitHub path (for example `fpurichaya/devops-task`).
+
+Tag scheme:
+
+- `sha-<full git commit sha>` — immutable build identifier
+- `main` — moving tag for the latest `main` build
+
+No `latest` tag is published.
+
 ## Checks
 
 ```bash
