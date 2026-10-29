@@ -1,5 +1,5 @@
 # node:24.21.0-bookworm-slim
-FROM node:24.21.0-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS base
+FROM node:26.12.0-bookworm-slim@sha256:742a0fe7320e09e0321222b68165e6ac731d30470e7ea7f98f9bfc3a6e1034fe AS base
 RUN corepack enable
 WORKDIR /app
 
@@ -12,7 +12,7 @@ COPY apps/api apps/api
 RUN pnpm deploy --legacy --filter=@devops-task/api --prod /prod/api \
   && test -f /prod/api/sql/001_counters.sql
 
-FROM node:24.21.0-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 AS runtime
+FROM node:26.12.0-bookworm-slim@sha256:742a0fe7320e09e0321222b68165e6ac731d30470e7ea7f98f9bfc3a6e1034fe AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 COPY --from=build --chown=node:node /prod/api .
