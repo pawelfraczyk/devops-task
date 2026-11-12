@@ -104,6 +104,110 @@ pnpm test
 
 The tests do not need Postgres or Valkey.
 
+## Remote state
+
+Task 6 adds a Terragrunt layout and one S3 bucket for OpenTofu state. This unit does not create a VPC or a cluster.
+
+```text
+infra/provider.hcl         AWS provider and version pins
+infra/root.hcl             S3 backend for every later unit
+infra/live/dev/env.hcl     region eu-central-1 and name prefix devops-task-dev
+infra/live/dev/state/      the bucket, with a local backend
+```
+
+Pinned versions: OpenTofu 1.13.9, Terragrunt 1.1.6, and hashicorp/aws 6.72.0. OpenTofu 1.13.9 is the current 1.13 patch. Terragrunt 1.2.1 is a newer minor, so this repo stays on the 1.1 line.
+
+The bucket name is `devops-task-dev-tfstate-<account id>`. Terragrunt reads the account id from the caller identity when it runs. The id is not stored in git.
+
+`infra/live/dev/state` includes `provider.hcl` and uses a local backend. It does not include `root.hcl`, because that backend points at the bucket this unit creates. Later units include the root file like this:
+
+```hcl
+include "root" {
+  path = find_in_parent_folders("root.hcl")
+}
+```
+
+That generates an S3 backend. The state key is the unit path relative to `infra/root.hcl`. The backend encrypts state and locks with `use_lockfile = true`. It does not set `dynamodb_table`.
+
+`root.hcl` only writes the backend configuration. It does not create the bucket. The state unit creates it with versioning, AES256 encryption, all four public access block settings, and a bucket policy that denies non-TLS access.
+
+Install OpenTofu 1.13.9 and Terragrunt 1.1.6, and point the AWS CLI at the account you own. Then, from the repo root:
+
+```bash
+cd infra/live/dev/state
+terragrunt init
+terragrunt plan
+terragrunt apply
+```
+
+`terragrunt init` writes `infra/live/dev/state/.terraform.lock.hcl`. Commit that lock file. Do not commit `.terraform/`, `.terragrunt-cache/`, `*.tfstate`, or `*.tfvars`.
+
+Local state for this unit is `infra/live/dev/state/terraform.tfstate`. Keep that file on the machine that applies the unit. Deleting it leaves the bucket in the account with no state to destroy it.
+
+After apply, read the bucket settings. Replace nothing in these commands; the account id comes from the caller identity:
+
+```bash
+ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+BUCKET="devops-task-dev-tfstate-${ACCOUNT_ID}"
+REGION="eu-central-1"
+
+aws s3api get-bucket-versioning --bucket "$BUCKET" --region "$REGION"
+aws s3api get-bucket-encryption --bucket "$BUCKET" --region "$REGION"
+aws s3api get-public-access-block --bucket "$BUCKET" --region "$REGION"
+aws s3api get-bucket-policy --bucket "$BUCKET" --region "$REGION"
+```
+
+`force_destroy` is off. Destroy fails while objects or versions remain. `aws s3 rm --recursive` leaves noncurrent versions and delete markers, so remove every version and delete marker first:
+
+```bash
+ACCOUNT_ID="$(aws sts get-caller-identity --query Account --output text)"
+BUCKET="devops-task-dev-tfstate-${ACCOUNT_ID}"
+REGION="eu-central-1"
+
+python3 - "$BUCKET" "$REGION" <<'PY'
+import json
+import subprocess
+import sys
+
+bucket, region = sys.argv[1], sys.argv[2]
+key_marker = None
+version_marker = None
+
+while True:
+    command = [
+        "aws", "s3api", "list-object-versions",
+        "--bucket", bucket,
+        "--region", region,
+        "--max-keys", "1000",
+        "--output", "json",
+    ]
+    if key_marker:
+        command.extend([
+            "--key-marker", key_marker,
+            "--version-id-marker", version_marker,
+        ])
+    page = json.loads(subprocess.check_output(command))
+    objects = []
+    for field in ("Versions", "DeleteMarkers"):
+        for item in page.get(field) or []:
+            objects.append({"Key": item["Key"], "VersionId": item["VersionId"]})
+    if objects:
+        subprocess.check_call([
+            "aws", "s3api", "delete-objects",
+            "--bucket", bucket,
+            "--region", region,
+            "--delete", json.dumps({"Objects": objects, "Quiet": True}),
+        ])
+    if not page.get("IsTruncated"):
+        break
+    key_marker = page["NextKeyMarker"]
+    version_marker = page["NextVersionIdMarker"]
+PY
+
+cd infra/live/dev/state
+terragrunt destroy
+```
+
 ## Environment
 
 | Variable | Process | Purpose |
