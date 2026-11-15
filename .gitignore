@@ -7,3 +7,9 @@ dist/
 coverage/
 *.log
 .DS_Store
+
+.terraform/
+.terragrunt-cache/
+*.tfstate
+*.tfstate.*
+*.tfvars
